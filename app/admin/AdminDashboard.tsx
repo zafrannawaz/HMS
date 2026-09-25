@@ -119,6 +119,10 @@ export default function AdminDashboard() {
   });
   const [labLoading, setLabLoading] = useState(false);
 
+  // ── Lab test editing state (NEW) ─────────────────────────────────────────────
+  const [editingTestId, setEditingTestId] = useState<number | null>(null);
+  const [editingTestPrice, setEditingTestPrice] = useState('');
+
   // ── Stats state ─────────────────────────────────────────────────────────────
   const [stats, setStats] = useState({
     patients: 0,
@@ -447,6 +451,61 @@ export default function AdminDashboard() {
       showToast(`✅ Lab test "${name}" added`, 'success');
       fetchAll();
     } else showToast('Error: ' + error.message, 'error');
+  };
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // LAB TEST PRICE HANDLERS (NEW)
+  // ────────────────────────────────────────────────────────────────────────────
+  const handleEditTestPrice = (testId: number, currentPrice: number) => {
+    setEditingTestId(testId);
+    setEditingTestPrice(String(currentPrice || ''));
+  };
+
+  const handleUpdateTestPrice = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingTestId === null || !editingTestPrice) {
+      showToast('Enter a valid price', 'error');
+      return;
+    }
+    setLabLoading(true);
+    try {
+      const { error } = await supabase
+        .from('lab_tests')
+        .update({ price: parseFloat(editingTestPrice) })
+        .eq('id', editingTestId);
+      if (error) throw error;
+      showToast('✅ Test price updated', 'success');
+      setEditingTestId(null);
+      setEditingTestPrice('');
+      fetchAll();
+    } catch (e: any) {
+      showToast('Error: ' + e.message, 'error');
+    } finally {
+      setLabLoading(false);
+    }
+  };
+
+  const handleCancelEditTest = () => {
+    setEditingTestId(null);
+    setEditingTestPrice('');
+  };
+
+  const handleDeleteLabTest = async (id: number) => {
+    if (!confirm('Delete this lab test and all its parameters?')) return;
+    setLabLoading(true);
+    try {
+      // Delete parameters first
+      await supabase.from('lab_test_parameters').delete().eq('test_id', id);
+      // Then delete test
+      const { error } = await supabase.from('lab_tests').delete().eq('id', id);
+      if (error) throw error;
+      showToast('✅ Lab test deleted', 'success');
+      fetchAll();
+    } catch (e: any) {
+      showToast('Error: ' + e.message, 'error');
+    } finally {
+      setLabLoading(false);
+    }
   };
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -1069,7 +1128,7 @@ export default function AdminDashboard() {
           <SectionHeader
             icon="🧪"
             title="Lab Test Parameters Manager"
-            subtitle="Define tests and their normal reference ranges — used by Lab Dashboard"
+            subtitle="Define tests, manage pricing, and set normal reference ranges"
             action={
               <button
                 onClick={handleAddLabTest}
@@ -1080,6 +1139,106 @@ export default function AdminDashboard() {
             }
           />
 
+          {/* All Lab Tests Table */}
+          <div className="border border-slate-200 rounded-xl overflow-x-auto">
+            <div className="bg-slate-50 px-4 py-2.5 border-b border-slate-200">
+              <p className="text-xs font-bold text-slate-600 uppercase">
+                All Lab Tests ({labTests.length})
+              </p>
+            </div>
+            {labTests.length === 0 ? (
+              <p className="p-6 text-center text-slate-400 text-sm">
+                No lab tests created yet
+              </p>
+            ) : (
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="text-xs font-bold text-slate-500 uppercase border-b border-slate-100">
+                    <th className="px-4 py-3 text-left">Test Name</th>
+                    <th className="px-4 py-3 text-center">Code</th>
+                    <th className="px-4 py-3 text-right">Price (Rs)</th>
+                    <th className="px-4 py-3 text-center">Parameters</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {labTests.map((test) => {
+                    const paramCount = labParams.filter(
+                      (p) => p.test_id === test.id
+                    ).length;
+                    const isEditing = editingTestId === test.id;
+                    return (
+                      <tr key={test.id} className="hover:bg-slate-50">
+                        <td className="px-4 py-3 font-medium text-slate-800">
+                          {test.test_name}
+                        </td>
+                        <td className="px-4 py-3 text-center font-mono text-xs text-slate-500">
+                          {test.test_code || '—'}
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                          {isEditing ? (
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={editingTestPrice}
+                              onChange={(e) => setEditingTestPrice(e.target.value)}
+                              className="w-24 px-2 py-1 text-right border border-purple-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                              autoFocus
+                            />
+                          ) : (
+                            `Rs. ${test.price || '0'}`
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-xs font-semibold text-slate-600 bg-slate-100 px-2.5 py-1 rounded-full">
+                            {paramCount}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          {isEditing ? (
+                            <div className="flex justify-end gap-2">
+                              <button
+                                onClick={handleUpdateTestPrice}
+                                disabled={labLoading}
+                                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50 transition-colors"
+                              >
+                                ✅ Save
+                              </button>
+                              <button
+                                onClick={handleCancelEditTest}
+                                className="text-xs font-bold px-2.5 py-1 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-100 transition-colors"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex justify-end gap-1.5">
+                              <button
+                                onClick={() =>
+                                  handleEditTestPrice(test.id, test.price)
+                                }
+                                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 hover:bg-blue-100 transition-colors"
+                              >
+                                Edit Price
+                              </button>
+                              <button
+                                onClick={() => handleDeleteLabTest(test.id)}
+                                className="text-xs font-bold px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-500 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-colors"
+                              >
+                                Del
+                              </button>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Test Parameters Section */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Test selector */}
             <div className="space-y-3">

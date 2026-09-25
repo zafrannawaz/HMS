@@ -1,8 +1,8 @@
 'use client';
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { supabase } from '../lib/supabaseClient';
-import { getSession, clearSession, revalidateSession } from '../lib/auth';
+import { supabase } from '@/lib/supabaseClient';
+import { getSession, clearSession, revalidateSession } from '@/lib/auth';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN CONCEPT
@@ -13,10 +13,6 @@ import { getSession, clearSession, revalidateSession } from '../lib/auth';
 // them to their console. Mono type stands in for printed chart/badge text;
 // Inter carries the actual reading.
 // ─────────────────────────────────────────────────────────────────────────────
-
-// ─── Role → route / department / badge colour ─────────────────────────────────
-// Matches the role vocabulary used in AdminDashboard (ROLE_DEPT_MAP), plus a
-// couple of aliases so older or shorter role labels still resolve correctly.
 
 type RoleInfo = {
   route: string;
@@ -105,31 +101,38 @@ function getInitials(name: string) {
   );
 }
 
-// ─── Small inline icons (kept dependency-free) ─────────────────────────────────
+// ─── Isolated Live Clock Component to Prevent Page Flickering ─────────────────
+function LiveClock() {
+  const [timeStr, setTimeStr] = useState('--:--:--');
 
+  useEffect(() => {
+    const updateTime = () => {
+      setTimeStr(
+        new Date().toLocaleTimeString([], {
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+        })
+      );
+    };
+    updateTime();
+    const t = setInterval(updateTime, 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  return <span suppressHydrationWarning>{timeStr}</span>;
+}
+
+// ─── Small inline icons ────────────────────────────────────────────────────────
 const EyeIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-  >
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <path d="M1.5 12s4-7.5 10.5-7.5S22.5 12 22.5 12s-4 7.5-10.5 7.5S1.5 12 1.5 12Z" />
     <circle cx="12" cy="12" r="3" />
   </svg>
 );
 
 const EyeOffIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-  >
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <path d="M3 3l18 18" />
     <path d="M10.6 5.1A10.9 10.9 0 0 1 12 4.5c6.5 0 10.5 7.5 10.5 7.5a17.4 17.4 0 0 1-3.4 4.4M6.6 6.6C3.6 8.5 1.5 12 1.5 12S5.5 19.5 12 19.5c1.5 0 2.9-.3 4.1-.9" />
     <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
@@ -137,102 +140,40 @@ const EyeOffIcon = () => (
 );
 
 const SpinnerIcon = () => (
-  <svg
-    className="animate-spin"
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-  >
-    <circle
-      className="opacity-25"
-      cx="12"
-      cy="12"
-      r="10"
-      stroke="currentColor"
-      strokeWidth="3"
-    />
-    <path
-      className="opacity-90"
-      fill="currentColor"
-      d="M4 12a8 8 0 018-8v3.2A4.8 4.8 0 007.2 12H4z"
-    />
+  <svg className="animate-spin" width="18" height="18" viewBox="0 0 24 24" fill="none">
+    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" />
+    <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v3.2A4.8 4.8 0 007.2 12H4z" />
   </svg>
 );
 
 const UserIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-  >
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <circle cx="12" cy="8" r="3.5" />
     <path d="M4.5 20c1.4-3.6 4.4-5.5 7.5-5.5s6.1 1.9 7.5 5.5" />
   </svg>
 );
 
 const LockIcon = () => (
-  <svg
-    width="18"
-    height="18"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="1.8"
-  >
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
     <rect x="4.5" y="10.5" width="15" height="9.5" rx="2" />
     <path d="M7.5 10.5V7.5a4.5 4.5 0 0 1 9 0v3" />
   </svg>
 );
 
 const CheckIcon = () => (
-  <svg
-    width="30"
-    height="30"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="white"
-    strokeWidth="2.5"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-  >
+  <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <path className="check-draw" d="M4 12.5l5 5L20 6" />
   </svg>
 );
 
-// ─── ECG waveform (drawn once, looped seamlessly) ──────────────────────────────
-
-const ECG_POINTS =
-  '0,30 36,30 46,10 56,50 66,22 76,30 132,30 142,6 156,56 168,30 210,30 220,16 234,44 246,30 300,30';
+const ECG_POINTS = '0,30 36,30 46,10 56,50 66,22 76,30 132,30 142,6 156,56 168,30 210,30 220,16 234,44 246,30 300,30';
 
 function PulseLine() {
   return (
     <div className="ecg-wrap" aria-hidden="true">
-      <svg
-        className="ecg-track"
-        viewBox="0 0 600 60"
-        preserveAspectRatio="none"
-      >
-        <polyline
-          points={ECG_POINTS}
-          fill="none"
-          stroke="#2DD4BF"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-        <polyline
-          points={ECG_POINTS}
-          fill="none"
-          stroke="#2DD4BF"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          transform="translate(300,0)"
-        />
+      <svg className="ecg-track" viewBox="0 0 600 60" preserveAspectRatio="none">
+        <polyline points={ECG_POINTS} fill="none" stroke="#2DD4BF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+        <polyline points={ECG_POINTS} fill="none" stroke="#2DD4BF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" transform="translate(300,0)" />
       </svg>
       <div className="ecg-fade-l" />
       <div className="ecg-fade-r" />
@@ -240,21 +181,14 @@ function PulseLine() {
   );
 }
 
-// ─── Department marquee ─────────────────────────────────────────────────────────
-
 function DeptMarquee() {
-  const depts = Array.from(
-    new Set(Object.values(ROLE_CONFIG).map((r) => r.dept))
-  );
-  const list = [...depts, ...depts]; // duplicate for seamless loop
+  const depts = Array.from(new Set(Object.values(ROLE_CONFIG).map((r) => r.dept)));
+  const list = [...depts, ...depts];
   return (
     <div className="marquee-wrap" aria-hidden="true">
       <div className="marquee-track font-brand-mono">
         {list.map((d, i) => (
-          <span
-            key={i}
-            className="flex items-center gap-2 text-[11px] tracking-widest uppercase text-teal-200/70 pr-8"
-          >
+          <span key={i} className="flex items-center gap-2 text-[11px] tracking-widest uppercase text-teal-200/70 pr-8">
             <span className="w-1 h-1 rounded-full bg-teal-400/70" />
             {d}
           </span>
@@ -264,13 +198,6 @@ function DeptMarquee() {
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
-
-// Pulled out as a plain string (not a JSX text child) so the server-rendered
-// HTML and the client-rendered HTML byte-match exactly — embedding quotes
-// directly inside <style>{`...`}</style> gets HTML-entity-encoded on the
-// server (' becomes &#x27;) but not on the client re-render, which is what
-// was causing the "Text content does not match server-rendered HTML" error.
 const LOGIN_STYLES = `
   @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap");
   .font-brand-sans { font-family: "Inter", ui-sans-serif, system-ui, sans-serif; }
@@ -280,11 +207,16 @@ const LOGIN_STYLES = `
   .marquee-wrap { overflow: hidden; width: 100%; }
   .marquee-track { display: flex; width: max-content; animation: marquee 22s linear infinite; }
 
-  .ecg-wrap { position: relative; height: 56px; width: 100%; overflow: hidden; }
-  .ecg-track { position: absolute; top: 0; left: 0; height: 100%; width: 200%; animation: marquee 5.5s linear infinite; }
+  .ecg-wrap { position: relative; height: 56px; width: 100%; overflow: hidden; contain: strict; }
+  .ecg-track { position: absolute; top: 0; left: 0; height: 100%; width: 200%; animation: marquee 5.5s linear infinite; contain: layout style paint; will-change: transform; }
   .ecg-fade-l, .ecg-fade-r { position: absolute; top: 0; bottom: 0; width: 48px; z-index: 2; pointer-events: none; }
   .ecg-fade-l { left: 0; background: linear-gradient(90deg, #0F1B2D, transparent); }
   .ecg-fade-r { right: 0; background: linear-gradient(270deg, #0F1B2D, transparent); }
+
+  @media (max-width: 1023.98px) {
+    .ecg-wrap, .marquee-wrap { display: none !important; }
+    .ecg-track, .marquee-track { animation: none !important; }
+  }
 
   @keyframes shake {
     10%, 90% { transform: translateX(-1px); }
@@ -341,23 +273,8 @@ export default function LoginPage() {
   const [authedRole, setAuthedRole] = useState<RoleInfo | null>(null);
   const [authedName, setAuthedName] = useState('');
 
-  const [now, setNow] = useState<Date | null>(null);
   const shakeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Live clock (system status strip) ────────────────────────────────────────
-  useEffect(() => {
-    setNow(new Date());
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  // ── If already signed in on this device, verify it's still valid before
-  //    skipping straight to their console. A stored session only proves
-  //    "this browser logged in once" — it doesn't mean the account still
-  //    exists, is still active, or still has the same role. Without this
-  //    check, revoking someone's access in Admin had no effect until they
-  //    happened to log out manually, and visiting /login would just bounce
-  //    them straight back to their (possibly revoked) old module.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -370,8 +287,6 @@ export default function LoginPage() {
       if (result.ok) {
         router.replace(result.roleInfo.route);
       } else {
-        // Session no longer valid — clear it and let them sign in fresh
-        // instead of silently redirecting them anywhere.
         clearSession();
       }
     })();
@@ -380,7 +295,6 @@ export default function LoginPage() {
     };
   }, [router]);
 
-  // ── Submit ───────────────────────────────────────────────────────────────────
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -400,7 +314,6 @@ export default function LoginPage() {
 
       if (qErr) throw qErr;
 
-      // Generic message either way — never reveal whether the username exists.
       if (!data || data.password !== password) {
         setError('Incorrect username or password.');
         triggerShake();
@@ -432,7 +345,7 @@ export default function LoginPage() {
       setStage('success');
 
       setTimeout(() => router.push(roleInfo.route), 1500);
-    } catch (err: any) {
+    } catch {
       setError('Could not reach the server. Please try again.');
       triggerShake();
     } finally {
@@ -446,28 +359,14 @@ export default function LoginPage() {
     shakeTimer.current = setTimeout(() => setShake(false), 500);
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // RENDER
-  // ─────────────────────────────────────────────────────────────────────────────
-
   return (
     <div className="min-h-screen flex flex-col lg:flex-row bg-[#F6F8F7] text-[#131B29]">
       <style dangerouslySetInnerHTML={{ __html: LOGIN_STYLES }} />
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          LEFT — Vitals / brand panel
-      ══════════════════════════════════════════════════════════════════════ */}
       <div className="relative hidden lg:flex lg:w-[44%] xl:w-[40%] flex-col justify-between overflow-hidden bg-[#0F1B2D] text-white p-12 xl:p-14">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute -top-24 -left-20 w-80 h-80 rounded-full bg-teal-500/10 blur-3xl"
-        />
-        <div
-          aria-hidden
-          className="pointer-events-none absolute bottom-0 right-0 w-72 h-72 rounded-full bg-indigo-500/10 blur-3xl"
-        />
+        <div aria-hidden className="pointer-events-none absolute -top-24 -left-20 w-80 h-80 rounded-full bg-teal-500/10 blur-3xl" />
+        <div aria-hidden className="pointer-events-none absolute bottom-0 right-0 w-72 h-72 rounded-full bg-indigo-500/10 blur-3xl" />
 
-        {/* Wordmark */}
         <div className="relative z-10 space-y-8">
           <div className="flex items-center gap-3">
             <span className="relative flex h-2.5 w-2.5">
@@ -492,12 +391,10 @@ export default function LoginPage() {
           </div>
         </div>
 
-        {/* Signature: pulse line */}
         <div className="relative z-10">
           <PulseLine />
         </div>
 
-        {/* Department ticker + live status */}
         <div className="relative z-10 space-y-4">
           <DeptMarquee />
           <div className="flex items-center justify-between border-t border-white/10 pt-4 font-brand-mono text-[11px] text-slate-400">
@@ -505,24 +402,12 @@ export default function LoginPage() {
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
               All systems operational
             </span>
-            <span suppressHydrationWarning>
-              {now
-                ? now.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    second: '2-digit',
-                  })
-                : '--:--:--'}
-            </span>
+            <LiveClock />
           </div>
         </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          RIGHT — Badge / login card
-      ══════════════════════════════════════════════════════════════════════ */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-10">
-        {/* Compact mobile header (visible below lg) */}
         <div className="w-full max-w-md">
           <div className="lg:hidden flex items-center gap-2 justify-center mb-6">
             <span className="relative flex h-2 w-2">
@@ -535,11 +420,9 @@ export default function LoginPage() {
           </div>
 
           <div className={`relative ${shake ? 'animate-shake' : ''}`}>
-            {/* Lanyard punch hole */}
             <div className="absolute left-1/2 -translate-x-1/2 -top-3 w-6 h-6 rounded-full bg-[#F6F8F7] ring-[6px] ring-white border border-slate-200 z-20" />
 
             <div className="relative bg-white rounded-3xl shadow-xl shadow-slate-900/5 border border-slate-200 overflow-hidden">
-              {/* Role stripe — neutral until authenticated, then recolours */}
               <div
                 className="h-1.5 w-full transition-colors duration-500"
                 style={{
@@ -577,7 +460,6 @@ export default function LoginPage() {
                       </p>
                     </div>
 
-                    {/* Username */}
                     <div className="space-y-1.5">
                       <label
                         htmlFor="username"
@@ -599,7 +481,7 @@ export default function LoginPage() {
                             if (error) setError('');
                           }}
                           placeholder="e.g. ahmed.ali"
-                          className="font-brand-sans w-full pl-10 pr-4 py-2.75 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
+                          className="font-brand-sans w-full pl-10 pr-4 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
                           style={{
                             paddingTop: '0.65rem',
                             paddingBottom: '0.65rem',
@@ -608,14 +490,22 @@ export default function LoginPage() {
                       </div>
                     </div>
 
-                    {/* Password */}
                     <div className="space-y-1.5">
-                      <label
-                        htmlFor="password"
-                        className="font-brand-sans text-xs font-semibold text-slate-600"
-                      >
-                        Password
-                      </label>
+                      <div className="flex items-center justify-between">
+                        <label
+                          htmlFor="password"
+                          className="font-brand-sans text-xs font-semibold text-slate-600"
+                        >
+                          Password
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => router.push('/forgot-password')}
+                          className="font-brand-sans text-xs font-semibold text-teal-600 hover:text-teal-700 transition-colors"
+                        >
+                          Forgot password?
+                        </button>
+                      </div>
                       <div className="relative">
                         <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400">
                           <LockIcon />
@@ -630,7 +520,7 @@ export default function LoginPage() {
                             if (error) setError('');
                           }}
                           placeholder="••••••••"
-                          className="font-brand-sans w-full pl-10 pr-11 py-2.75 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
+                          className="font-brand-sans w-full pl-10 pr-11 border border-slate-300 rounded-xl text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition-all"
                           style={{
                             paddingTop: '0.65rem',
                             paddingBottom: '0.65rem',
@@ -649,7 +539,6 @@ export default function LoginPage() {
                       </div>
                     </div>
 
-                    {/* Keep signed in */}
                     <label className="flex items-center gap-2.5 cursor-pointer select-none">
                       <input
                         type="checkbox"
@@ -662,7 +551,6 @@ export default function LoginPage() {
                       </span>
                     </label>
 
-                    {/* Error banner */}
                     {error && (
                       <div
                         role="alert"
@@ -678,7 +566,6 @@ export default function LoginPage() {
                       </div>
                     )}
 
-                    {/* Submit */}
                     <button
                       type="submit"
                       disabled={loading}
@@ -699,7 +586,6 @@ export default function LoginPage() {
                     </p>
                   </form>
                 ) : (
-                  // ── Success: badge reveal ────────────────────────────────
                   <div className="badge-in flex flex-col items-center text-center py-2">
                     <div
                       className="ring-pop relative w-20 h-20 rounded-2xl flex items-center justify-center font-brand-sans text-2xl font-bold text-white shadow-lg mb-5"
@@ -748,7 +634,6 @@ export default function LoginPage() {
                 )}
               </div>
 
-              {/* Barcode footer */}
               <div className="px-8 sm:px-10 pb-6">
                 <div
                   className="h-6 w-full rounded-sm opacity-60"
