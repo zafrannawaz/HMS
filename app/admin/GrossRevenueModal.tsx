@@ -1,6 +1,5 @@
 'use client';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { clearSession, validatePasswordStrength } from '../../lib/auth';
@@ -71,7 +70,7 @@ function SectionHeader({ icon, title, subtitle, action }: SectionHeaderProps) {
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// NEW: Registrations + Doctor Activity modals (helpers & components)
+// Registrations + Doctor Activity modals (helpers & components)
 // ═════════════════════════════════════════════════════════════════════════════
 
 // Local-day range (Pakistan time) as ISO strings
@@ -235,157 +234,34 @@ function StatusPill({ s }: { s?: string }) {
   );
 }
 
-// How many pop-out windows are open (live refresh keeps running even if the main tab is hidden)
-const popState = { count: 0 };
-
-// Renders its children inside a separate browser window (React portal) and copies the page styles.
-function PopOutPortal({
-  win,
-  title,
-  onClosed,
-  children,
-}: {
-  win: Window;
-  title: string;
-  onClosed: () => void;
-  children: React.ReactNode;
-}) {
-  const [el, setEl] = useState<HTMLElement | null>(null);
-
-  useEffect(() => {
-    const doc = win.document;
-    doc.title = title;
-    doc.documentElement.className = document.documentElement.className;
-    doc.head.innerHTML =
-      '<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">';
-    document.querySelectorAll('link[rel="stylesheet"], style').forEach((n) => {
-      const c = n.cloneNode(true) as HTMLElement;
-      if (c instanceof HTMLLinkElement) c.href = (n as HTMLLinkElement).href;
-      doc.head.appendChild(c);
-    });
-    doc.body.innerHTML = '';
-    doc.body.className = document.body.className;
-    const div = doc.createElement('div');
-    div.className = 'min-h-screen bg-slate-50 p-4 font-sans text-slate-900';
-    doc.body.appendChild(div);
-    setEl(div);
-
-    const onPopupClosed = () => onClosed();
-    const closeWithParent = () => {
-      try { win.close(); } catch { /* ignore */ }
-    };
-    win.addEventListener('beforeunload', onPopupClosed);
-    window.addEventListener('beforeunload', closeWithParent);
-    return () => {
-      win.removeEventListener('beforeunload', onPopupClosed);
-      window.removeEventListener('beforeunload', closeWithParent);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [win]);
-
-  return el ? createPortal(children, el) : null;
-}
-
 function ModalShell({
   title,
   onClose,
   right,
-  wide,
   children,
 }: {
   title: React.ReactNode;
   onClose: () => void;
   right?: React.ReactNode;
-  wide?: boolean;
   children: React.ReactNode;
 }) {
-  const [popWin, setPopWin] = useState<Window | null>(null);
-  const popRef = useRef<Window | null>(null);
-  popRef.current = popWin;
-
-  // keep live-refresh timers running while a pop-out window is open
-  useEffect(() => {
-    if (!popWin) return;
-    popState.count++;
-    return () => { popState.count--; };
-  }, [popWin]);
-
-  // close the pop-out window if this modal goes away
-  useEffect(() => () => { popRef.current?.close(); }, []);
-
-  const openPop = () => {
-    const w = window.open('', '_blank', 'popup=yes,width=1280,height=820,left=60,top=40');
-    if (!w) {
-      alert('Pop-up block ho gaya. Address bar mein pop-ups allow kar ke dobara try karo.');
-      return;
-    }
-    w.document.open();
-    w.document.write('<!doctype html><html><head><meta charset="utf-8"></head><body></body></html>');
-    w.document.close();
-    setPopWin(w);
-  };
-  const closePop = () => {
-    popWin?.close();
-    setPopWin(null);
-  };
-
-  const card = (
-    <div
-      className={
-        popWin
-          ? 'bg-white rounded-2xl shadow border border-slate-200 w-full flex flex-col'
-          : `bg-white rounded-2xl shadow-2xl w-full ${wide ? 'max-w-7xl max-h-[92vh]' : 'max-w-5xl max-h-[90vh]'} flex flex-col`
-      }
-    >
-      <div className="flex items-center justify-between gap-3 flex-wrap p-5 border-b border-slate-200 bg-slate-50 rounded-t-2xl">
-        <h2 className="text-base font-bold text-slate-800">{title}</h2>
-        <div className="flex items-center gap-3">
-          {right}
-          {popWin ? (
-            <button
-              onClick={closePop}
-              className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-            >
-              ⤶ Back to dashboard
-            </button>
-          ) : (
-            <button
-              onClick={openPop}
-              title="Naye window mein kholo"
-              className="text-xs font-bold px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100"
-            >
-              ⧉ Pop out
-            </button>
-          )}
-          {!popWin && (
-            <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">
-              &times;
-            </button>
-          )}
-        </div>
-      </div>
-      <div className={`p-5 space-y-4 ${popWin ? '' : 'overflow-y-auto'}`}>{children}</div>
-    </div>
-  );
-
-  if (popWin) {
-    return (
-      <PopOutPortal
-        win={popWin}
-        title={typeof title === 'string' ? title : 'MedixERP'}
-        onClosed={() => setPopWin(null)}
-      >
-        {card}
-      </PopOutPortal>
-    );
-  }
-
   return (
     <div
       className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      {card}
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between gap-3 flex-wrap p-5 border-b border-slate-200 bg-slate-50 rounded-t-2xl">
+          <h2 className="text-base font-bold text-slate-800">{title}</h2>
+          <div className="flex items-center gap-3">
+            {right}
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">
+              &times;
+            </button>
+          </div>
+        </div>
+        <div className="p-5 overflow-y-auto space-y-4">{children}</div>
+      </div>
     </div>
   );
 }
@@ -476,7 +352,7 @@ function RegistrationsModal({ onClose }: { onClose: () => void }) {
     load(false);
     let busy = false;
     const t = setInterval(() => {
-      if ((document.hidden && !popState.count) || busy) return; // skip when tab hidden or last refresh still running
+      if (document.hidden || busy) return; // skip when tab hidden or last refresh still running
       busy = true;
       load(true).finally(() => { busy = false; });
     }, 5000); // live refresh
@@ -578,12 +454,11 @@ function DoctorActivityModal({ staffList, onClose }: { staffList: any[]; onClose
     const load = async (silent: boolean) => {
       if (!silent) setLoading(true);
       const { from, to } = localDayRange(date);
-      // sessions that overlap the selected day (incl. ones started earlier and still running)
       const { data: sess } = await supabase
         .from('staff_sessions')
         .select('*')
+        .gte('login_at', from)
         .lt('login_at', to)
-        .or(`last_seen_at.gte.${from},logout_at.gte.${from}`)
         .order('login_at', { ascending: true });
       const v = await loadVisitBundle(date);
       if (cancelled) return;
@@ -594,7 +469,7 @@ function DoctorActivityModal({ staffList, onClose }: { staffList: any[]; onClose
     load(false);
     let busy = false;
     const t = setInterval(() => {
-      if ((document.hidden && !popState.count) || busy) return; // skip when tab hidden or last refresh still running
+      if (document.hidden || busy) return; // skip when tab hidden or last refresh still running
       busy = true;
       load(true).finally(() => { busy = false; });
     }, 5000); // live refresh
@@ -611,11 +486,8 @@ function DoctorActivityModal({ staffList, onClose }: { staffList: any[]; onClose
     visits.filter((v) =>
       (v.doctor_assigned || '').toLowerCase().includes((d.name || '').trim().toLowerCase())
     );
-  const isToday = date === new Date().toLocaleDateString('en-CA');
   const isActive = (s: any) =>
-    isToday &&
-    !s.logout_at &&
-    (!s.last_seen_at || Date.now() - +new Date(s.last_seen_at) < 3 * 60 * 1000);
+    !s.logout_at && (!s.last_seen_at || Date.now() - +new Date(s.last_seen_at) < 3 * 60 * 1000);
 
   return (
     <ModalShell
@@ -844,7 +716,7 @@ function PendingLabModal({ staffList, onClose }: { staffList: any[]; onClose: ()
     load(false);
     let busy = false;
     const t = setInterval(() => {
-      if ((document.hidden && !popState.count) || busy) return;
+      if (document.hidden || busy) return;
       busy = true;
       load(true).finally(() => { busy = false; });
     }, 5000); // live refresh
@@ -919,7 +791,7 @@ function PendingLabModal({ staffList, onClose }: { staffList: any[]; onClose: ()
 }
 
 // ═════════════════════════════════════════════════════════════════════════════
-// Gross Revenue modal
+// Gross Revenue modal (inlined — no separate file needed)
 // Gross Revenue = Checkup fee + Lab test fee + Pharmacy bill (sirf "Paid" wali)
 // ═════════════════════════════════════════════════════════════════════════════
 const revTodayStr = () => new Date().toLocaleDateString('en-CA');
@@ -1134,7 +1006,7 @@ function GrossRevenueModal({ onClose }: { onClose: () => void }) {
     let busy = false;
     load(false);
     const t = setInterval(() => {
-      if (cancelled || (document.hidden && !popState.count) || busy) return;
+      if (cancelled || document.hidden || busy) return;
       busy = true;
       load(true).finally(() => { busy = false; });
     }, 10000);
@@ -1160,146 +1032,155 @@ function GrossRevenueModal({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <ModalShell
-      wide
-      onClose={onClose}
-      title={
-        <span className="block">
-          <span className="block">💰 Gross Revenue Report</span>
-          <span className="block text-xs font-normal text-slate-500 mt-0.5">
-            Checkup fee + Lab tests + Pharmacy bill (sirf paid amounts)
-          </span>
-        </span>
-      }
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 px-4"
+      onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      {/* Filters */}
-      <div className="flex items-end gap-3 flex-wrap">
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold text-slate-500 uppercase">From</label>
-          <input
-            type="date"
-            value={from}
-            max={to}
-            onChange={(e) => e.target.value && setFrom(e.target.value)}
-            className="block px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800"
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-[10px] font-bold text-slate-500 uppercase">To</label>
-          <input
-            type="date"
-            value={to}
-            min={from}
-            onChange={(e) => e.target.value && setTo(e.target.value)}
-            className="block px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800"
-          />
-        </div>
-        <div className="flex gap-1.5 flex-wrap">
-          {quick.map((q) => (
-            <button
-              key={q.label}
-              onClick={q.go}
-              className="text-xs font-bold px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
-            >
-              {q.label}
-            </button>
-          ))}
-        </div>
-        <button
-          onClick={() => downloadRevenueCsv(rows, from, to)}
-          disabled={rows.length === 0}
-          className="ml-auto text-xs font-bold px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white"
-        >
-          ⬇ Download Excel (CSV)
-        </button>
-      </div>
-
-      {/* Summary */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          ['🩺 Checkup Fees', sum('checkup'), 'text-blue-600'],
-          ['🧪 Lab Tests', sum('lab'), 'text-purple-600'],
-          ['💊 Pharmacy', sum('pharma'), 'text-orange-600'],
-          ['💰 Gross Revenue', sum('total'), 'text-emerald-700'],
-        ].map(([label, val, color]: any) => (
-          <div key={label} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
-            <p className="text-[10px] font-bold text-slate-400 uppercase">{label}</p>
-            <p className={`text-lg font-black mt-0.5 ${color}`}>{rs(val)}</p>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-7xl max-h-[92vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 flex-wrap p-5 border-b border-slate-200 bg-slate-50 rounded-t-2xl">
+          <div>
+            <h2 className="text-base font-bold text-slate-800">💰 Gross Revenue Report</h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Checkup fee + Lab tests + Pharmacy bill (sirf paid amounts)
+            </p>
           </div>
-        ))}
-      </div>
-
-      {/* Table */}
-      {loading ? (
-        <p className="text-sm text-slate-400 text-center py-8">Loading…</p>
-      ) : rows.length === 0 ? (
-        <p className="text-sm text-slate-400 text-center py-8">
-          Is date range mein koi paid amount nahi mila.
-        </p>
-      ) : (
-        <div className="border border-slate-200 rounded-xl overflow-x-auto">
-          <table className="w-full text-left text-sm border-collapse">
-            <thead>
-              <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200">
-                <th className="px-3 py-3 whitespace-nowrap">Date</th>
-                <th className="px-3 py-3 whitespace-nowrap">Time</th>
-                <th className="px-3 py-3">Doctor</th>
-                <th className="px-3 py-3">Patient Name</th>
-                <th className="px-3 py-3 whitespace-nowrap">MR #</th>
-                <th className="px-3 py-3">CNIC</th>
-                <th className="px-3 py-3">Phone</th>
-                <th className="px-3 py-3 text-right whitespace-nowrap">Checkup Fee</th>
-                <th className="px-3 py-3">Lab Test Name</th>
-                <th className="px-3 py-3 text-right whitespace-nowrap">Lab Fee</th>
-                <th className="px-3 py-3 text-right whitespace-nowrap">Pharmacy Bill</th>
-                <th className="px-3 py-3 text-right whitespace-nowrap">Total Paid</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((r) => (
-                <tr key={r.key} className={r.unlinked ? 'bg-amber-50/50' : 'hover:bg-slate-50'}>
-                  <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">{revFmtDate(r.t)}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">{revFmtTime(r.t)}</td>
-                  <td className="px-3 py-2.5 text-xs text-slate-700">{r.doctor}</td>
-                  <td className="px-3 py-2.5 font-semibold text-slate-800">{r.name}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs">{r.mr ?? '—'}</td>
-                  <td className="px-3 py-2.5 font-mono text-xs">{r.cnic || '—'}</td>
-                  <td className="px-3 py-2.5 text-xs">{r.phone || '—'}</td>
-                  <td className="px-3 py-2.5 text-right text-xs">{r.checkup ? rs(r.checkup) : '—'}</td>
-                  <td className="px-3 py-2.5 text-xs">
-                    {r.labNames.length
-                      ? r.labNames.map((n: string, i: number) => (
-                          <span
-                            key={i}
-                            className="inline-block bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-md mr-1 mb-1"
-                          >
-                            {n}
-                          </span>
-                        ))
-                      : '—'}
-                  </td>
-                  <td className="px-3 py-2.5 text-right text-xs">{r.lab ? rs(r.lab) : '—'}</td>
-                  <td className="px-3 py-2.5 text-right text-xs">{r.pharma ? rs(r.pharma) : '—'}</td>
-                  <td className="px-3 py-2.5 text-right font-bold text-emerald-700">{rs(r.total)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-slate-100 font-bold text-slate-800 text-sm border-t-2 border-slate-300">
-                <td className="px-3 py-3" colSpan={7}>
-                  TOTAL ({rows.length} records)
-                </td>
-                <td className="px-3 py-3 text-right">{rs(sum('checkup'))}</td>
-                <td className="px-3 py-3" />
-                <td className="px-3 py-3 text-right">{rs(sum('lab'))}</td>
-                <td className="px-3 py-3 text-right">{rs(sum('pharma'))}</td>
-                <td className="px-3 py-3 text-right text-emerald-700">{rs(sum('total'))}</td>
-              </tr>
-            </tfoot>
-          </table>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700 text-2xl leading-none">
+            &times;
+          </button>
         </div>
-      )}
-    </ModalShell>
+
+        <div className="p-5 overflow-y-auto space-y-4">
+          {/* Filters */}
+          <div className="flex items-end gap-3 flex-wrap">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">From</label>
+              <input
+                type="date"
+                value={from}
+                max={to}
+                onChange={(e) => e.target.value && setFrom(e.target.value)}
+                className="block px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-slate-500 uppercase">To</label>
+              <input
+                type="date"
+                value={to}
+                min={from}
+                onChange={(e) => e.target.value && setTo(e.target.value)}
+                className="block px-3 py-1.5 border border-slate-300 rounded-lg text-sm text-slate-800"
+              />
+            </div>
+            <div className="flex gap-1.5 flex-wrap">
+              {quick.map((q) => (
+                <button
+                  key={q.label}
+                  onClick={q.go}
+                  className="text-xs font-bold px-3 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50"
+                >
+                  {q.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => downloadRevenueCsv(rows, from, to)}
+              disabled={rows.length === 0}
+              className="ml-auto text-xs font-bold px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 text-white"
+            >
+              ⬇ Download Excel (CSV)
+            </button>
+          </div>
+
+          {/* Summary */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              ['🩺 Checkup Fees', sum('checkup'), 'text-blue-600'],
+              ['🧪 Lab Tests', sum('lab'), 'text-purple-600'],
+              ['💊 Pharmacy', sum('pharma'), 'text-orange-600'],
+              ['💰 Gross Revenue', sum('total'), 'text-emerald-700'],
+            ].map(([label, val, color]: any) => (
+              <div key={label} className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                <p className="text-[10px] font-bold text-slate-400 uppercase">{label}</p>
+                <p className={`text-lg font-black mt-0.5 ${color}`}>{rs(val)}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Table */}
+          {loading ? (
+            <p className="text-sm text-slate-400 text-center py-8">Loading…</p>
+          ) : rows.length === 0 ? (
+            <p className="text-sm text-slate-400 text-center py-8">
+              Is date range mein koi paid amount nahi mila.
+            </p>
+          ) : (
+            <div className="border border-slate-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-left text-sm border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase border-b border-slate-200">
+                    <th className="px-3 py-3 whitespace-nowrap">Date</th>
+                    <th className="px-3 py-3 whitespace-nowrap">Time</th>
+                    <th className="px-3 py-3">Doctor</th>
+                    <th className="px-3 py-3">Patient Name</th>
+                    <th className="px-3 py-3 whitespace-nowrap">MR #</th>
+                    <th className="px-3 py-3">CNIC</th>
+                    <th className="px-3 py-3">Phone</th>
+                    <th className="px-3 py-3 text-right whitespace-nowrap">Checkup Fee</th>
+                    <th className="px-3 py-3">Lab Test Name</th>
+                    <th className="px-3 py-3 text-right whitespace-nowrap">Lab Fee</th>
+                    <th className="px-3 py-3 text-right whitespace-nowrap">Pharmacy Bill</th>
+                    <th className="px-3 py-3 text-right whitespace-nowrap">Total Paid</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {rows.map((r) => (
+                    <tr key={r.key} className={r.unlinked ? 'bg-amber-50/50' : 'hover:bg-slate-50'}>
+                      <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">{revFmtDate(r.t)}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-600 whitespace-nowrap">{revFmtTime(r.t)}</td>
+                      <td className="px-3 py-2.5 text-xs text-slate-700">{r.doctor}</td>
+                      <td className="px-3 py-2.5 font-semibold text-slate-800">{r.name}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{r.mr ?? '—'}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs">{r.cnic || '—'}</td>
+                      <td className="px-3 py-2.5 text-xs">{r.phone || '—'}</td>
+                      <td className="px-3 py-2.5 text-right text-xs">{r.checkup ? rs(r.checkup) : '—'}</td>
+                      <td className="px-3 py-2.5 text-xs">
+                        {r.labNames.length
+                          ? r.labNames.map((n: string, i: number) => (
+                              <span
+                                key={i}
+                                className="inline-block bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-md mr-1 mb-1"
+                              >
+                                {n}
+                              </span>
+                            ))
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-2.5 text-right text-xs">{r.lab ? rs(r.lab) : '—'}</td>
+                      <td className="px-3 py-2.5 text-right text-xs">{r.pharma ? rs(r.pharma) : '—'}</td>
+                      <td className="px-3 py-2.5 text-right font-bold text-emerald-700">{rs(r.total)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-100 font-bold text-slate-800 text-sm border-t-2 border-slate-300">
+                    <td className="px-3 py-3" colSpan={7}>
+                      TOTAL ({rows.length} records)
+                    </td>
+                    <td className="px-3 py-3 text-right">{rs(sum('checkup'))}</td>
+                    <td className="px-3 py-3" />
+                    <td className="px-3 py-3 text-right">{rs(sum('lab'))}</td>
+                    <td className="px-3 py-3 text-right">{rs(sum('pharma'))}</td>
+                    <td className="px-3 py-3 text-right text-emerald-700">{rs(sum('total'))}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1314,7 +1195,7 @@ export default function AdminDashboard() {
   // ── Active tab ──────────────────────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState('overview');
 
-  // ── NEW: modal state ────────────────────────────────────────────────────────
+  // ── Modal state ─────────────────────────────────────────────────────────────
   const [showRegModal, setShowRegModal] = useState(false);
   const [showDocModal, setShowDocModal] = useState(false);
   const [showLabModal, setShowLabModal] = useState(false);
@@ -1359,7 +1240,7 @@ export default function AdminDashboard() {
   });
   const [labLoading, setLabLoading] = useState(false);
 
-  // ── Lab test editing state (NEW) ─────────────────────────────────────────────
+  // ── Lab test editing state ───────────────────────────────────────────────────
   const [editingTestId, setEditingTestId] = useState<number | null>(null);
   const [editingTestPrice, setEditingTestPrice] = useState('');
 
@@ -1409,9 +1290,6 @@ export default function AdminDashboard() {
       .select('*')
       .order('test_name');
     if (tests) setLabTests(tests);
-
-    // Stats — live from DB
-    const today = new Date().toISOString().slice(0, 10);
 
     // 1. Total Registrations Today (every visit registered today, even after discharge)
     const todayRange = localDayRange(new Date().toLocaleDateString('en-CA'));
@@ -1712,7 +1590,7 @@ export default function AdminDashboard() {
   };
 
   // ────────────────────────────────────────────────────────────────────────────
-  // LAB TEST PRICE HANDLERS (NEW)
+  // LAB TEST PRICE HANDLERS
   // ────────────────────────────────────────────────────────────────────────────
   const handleEditTestPrice = (testId: number, currentPrice: number) => {
     setEditingTestId(testId);
@@ -2728,7 +2606,7 @@ export default function AdminDashboard() {
         </div>
       )}
 
-      {/* ── NEW: Registrations & Doctor Activity modals ── */}
+      {/* ── Registrations, Doctor Activity, Lab & Revenue modals ── */}
       {showRegModal && <RegistrationsModal onClose={() => setShowRegModal(false)} />}
       {showDocModal && (
         <DoctorActivityModal staffList={staffList} onClose={() => setShowDocModal(false)} />

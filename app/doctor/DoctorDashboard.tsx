@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getSession, clearSession } from '../../lib/auth';
+import { touchSessionLog, endSessionLog } from '../../lib/sessionLog';
 
 // ─── Toast ───────────────────────────────────────────────────────────────────
 function Toast({ message, type, visible }: { message: string; type: string; visible: boolean }) {
@@ -534,10 +535,18 @@ function PatientSearchModal({ onClose }: { onClose: () => void }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 export default function DoctorDashboard() {
   const router = useRouter();
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await endSessionLog();
     clearSession();
     router.push('/login');
   };
+
+  // Heartbeat: dashboard khula ho to har minute last_seen_at update hota hai
+  useEffect(() => {
+    touchSessionLog();
+    const t = setInterval(touchSessionLog, 60000);
+    return () => clearInterval(t);
+  }, []);
 
   const [queue, setQueue] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
@@ -868,9 +877,11 @@ export default function DoctorDashboard() {
     const testPrice = testInfo?.price || 0;
 
     try {
+      const session = getSession();
       const { error } = await supabase.from('lab_orders').insert({
         patient_id: selectedPatient.id,
-        doctor_id: null,
+        visit_id: visitData?.id ?? null,
+        doctor_id: session?.id ?? null,
         total_amount: testPrice,
         test_name: testName,
         'order-status': 'Pending',

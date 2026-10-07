@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../lib/supabaseClient';
 import { getSession, clearSession, revalidateSession } from '../../lib/auth';
+import { startSessionLog } from '../../lib/sessionLog';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DESIGN CONCEPT
@@ -426,7 +427,7 @@ export default function LoginPage() {
         return;
       }
 
-      const session = {
+            const session = {
         id: data.id,
         name: data.name,
         username: data.username,
@@ -435,6 +436,12 @@ export default function LoginPage() {
       };
       const store = keepSignedIn ? window.localStorage : window.sessionStorage;
       store.setItem('medix_session', JSON.stringify(session));
+
+      // NEW: login ka record staff_sessions mein
+      await startSessionLog(
+        { id: data.id, username: data.username, name: data.name, role: data.role },
+        keepSignedIn
+      );
 
       setAuthedRole(roleInfo);
       setAuthedName(data.name);
