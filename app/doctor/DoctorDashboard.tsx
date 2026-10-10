@@ -1021,7 +1021,7 @@ export default function DoctorDashboard() {
   // RENDER
   // ─────────────────────────────────────────────────────────────────────────
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-4 bg-slate-50 min-h-screen font-sans text-slate-900">
+    <div className="w-full max-w-[2200px] mx-auto px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-6 2xl:px-12 space-y-4 bg-slate-50 min-h-screen font-sans text-slate-900">
 
       {/* ── Nav Bar ── */}
       <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex justify-between items-center">

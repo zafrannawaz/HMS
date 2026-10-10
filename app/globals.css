@@ -2,26 +2,32 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  MedixERP is a light-theme application.
+
+  The old template here switched the whole page to a pure BLACK background
+  whenever the computer was in dark mode. Because every dashboard only painted
+  its own light background inside a centred 1600px box, that black showed up on
+  both sides of the screen on wide monitors.
+
+  Now the page itself always has the same light background as the dashboards,
+  so there is never a black (or any mismatched) area, whatever the screen size
+  or the computer's theme.
+*/
+
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  color-scheme: light; /* form fields, scrollbars, autofill stay light too */
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
+html {
+  background: #f8fafc; /* slate-50 — same colour the dashboards use */
+  -webkit-text-size-adjust: 100%; /* stop phones from auto-enlarging text */
+  text-size-adjust: 100%;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  min-height: 100vh;
+  background: #f8fafc;
+  color: #0f172a; /* slate-900 */
+  overflow-x: hidden; /* never allow sideways scrolling on phones/tablets */
 }

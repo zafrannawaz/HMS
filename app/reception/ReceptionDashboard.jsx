@@ -9,6 +9,35 @@ import { clearSession } from '../../lib/auth';
 const validatePhone = (v) => /^03\d{9}$/.test(v.trim());
 const validateCnic = (v) => /^\d{5}-\d{7}-\d$/.test(v.trim());
 
+// Relation of a new member to the family head (the first person registered on a mobile number)
+const RELATIONS = ['Wife', 'Husband', 'Son', 'Daughter', 'Father', 'Mother', 'Brother', 'Sister', 'Other'];
+
+// Gender is pre-filled from the relation (reception can still change it)
+const REL_GENDER = {
+  Wife: 'Female',
+  Daughter: 'Female',
+  Mother: 'Female',
+  Sister: 'Female',
+  Husband: 'Male',
+  Son: 'Male',
+  Father: 'Male',
+  Brother: 'Male',
+};
+
+const relationIcon = (r) =>
+  ({
+    Self: '👤',
+    Wife: '👩',
+    Husband: '👨',
+    Son: '👦',
+    Daughter: '👧',
+    Father: '👴',
+    Mother: '👵',
+    Brother: '🧑',
+    Sister: '🧑',
+    Other: '👥',
+  }[r] || '👥');
+
 function formatCnic(raw) {
   const digits = raw.replace(/[^0-9]/g, '').slice(0, 13);
   if (digits.length <= 5) return digits;
@@ -16,12 +45,80 @@ function formatCnic(raw) {
   return `${digits.slice(0, 5)}-${digits.slice(5, 12)}-${digits.slice(12)}`;
 }
 
-function generateToken(queue) {
-  const nums = queue
-    .map((q) => parseInt((q.token || '').replace(/\D/g, ''), 10))
-    .filter(Boolean);
-  const next = nums.length ? Math.max(...nums) + 1 : 1;
-  return `T-${String(next).padStart(2, '0')}`;
+// ─── Family Panel — everyone registered on this mobile number / CNIC ────────
+
+function FamilyMemberRow({ p, isHead, queued, onCheckin }) {
+  const minor = p.age != null && Number(p.age) < 18;
+  return (
+    <div className="flex items-center justify-between gap-3 bg-white border border-slate-200 rounded-xl px-3 py-2.5">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="text-xl">{relationIcon(isHead ? 'Self' : p.relation)}</span>
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-slate-800 truncate">
+            {p.Full_Name}
+            <span
+              className={`ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                isHead ? 'bg-blue-100 text-blue-800' : 'bg-slate-100 text-slate-600'
+              }`}
+            >
+              {isHead ? 'Family Head' : p.relation || 'Member'}
+            </span>
+          </p>
+          <p className="text-[11px] text-slate-500 mt-0.5">
+            {p.age != null ? `${p.age} yrs` : '—'} / {p.Gender || '—'} &nbsp;•&nbsp;{' '}
+            {p.CNIC_Number ? `CNIC ${p.CNIC_Number}` : minor ? 'No CNIC (under 18)' : 'CNIC —'}{' '}
+            &nbsp;•&nbsp; MR #{p.id}
+          </p>
+        </div>
+      </div>
+      {queued ? (
+        <span className="shrink-0 text-[11px] font-bold px-3 py-1.5 rounded-lg bg-amber-100 text-amber-800">
+          🕒 Already in queue
+        </span>
+      ) : (
+        <button
+          onClick={() => onCheckin(p)}
+          className="shrink-0 text-xs font-bold px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors"
+        >
+          Check-in →
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FamilyPanel({ groups, queuedIds, onCheckin }) {
+  const total = groups.reduce((n, g) => n + 1 + g.members.length, 0);
+  return (
+    <div className="border border-blue-200 bg-blue-50/60 rounded-xl p-4 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-bold text-blue-800">👪 Family on this number</h3>
+        <span className="text-[11px] font-semibold text-blue-600">{total} registered</span>
+      </div>
+
+      {groups.map((g) => (
+        <div key={g.head.id} className="space-y-1.5">
+          <FamilyMemberRow
+            p={g.head}
+            isHead
+            queued={queuedIds.has(String(g.head.id))}
+            onCheckin={onCheckin}
+          />
+          {g.members.map((m) => (
+            <div key={m.id} className="ml-5 pl-3 border-l-2 border-blue-200">
+              <FamilyMemberRow p={m} queued={queuedIds.has(String(m.id))} onCheckin={onCheckin} />
+            </div>
+          ))}
+        </div>
+      ))}
+
+      <p className="text-[11px] text-slate-500 leading-relaxed">
+        Kisi registered member ko check-in karna ho to <b>Check-in</b> dabao. Naya family member
+        (wife, bachay, walidain) add karna ho to neeche form bharo — purani entries kabhi change
+        nahi hoti.
+      </p>
+    </div>
+  );
 }
 
 // ─── Revisit Modal ───────────────────────────────────────────────────────────
@@ -222,7 +319,7 @@ function RevisitModal({ patient, visits, doctors, procedures, onClose, onReCheck
                         visits[0].created_at?.slice(0, 10)}
                     </span>
                     {' — '}
-                    {visits[0].procedure || '—'}
+                    {visits[0].symptoms || '—'}
                   </div>
                 </div>
               )}
@@ -245,7 +342,7 @@ function RevisitModal({ patient, visits, doctors, procedures, onClose, onReCheck
                 onClick={handleSubmit}
                 className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm rounded-xl shadow-sm transition-colors flex items-center gap-2"
               >
-                ✅ Confirm Re-Check In &amp; Issue Token
+                ✅ Confirm Re-Check In &amp; Add to Queue
               </button>
             </div>
           </div>
@@ -322,7 +419,7 @@ function LabPaymentModal({
                     className="flex items-center justify-between px-3 py-2.5 text-sm"
                   >
                     <span className="text-slate-700 font-medium">
-                      Test order #{i + 1}
+                      {lo.test_name || `Test order #${i + 1}`}
                     </span>
                     <span className="font-bold text-slate-800">
                       Rs. {lo.total_amount || 0}
@@ -632,7 +729,7 @@ function Toast({ message, type, visible }) {
   };
   return (
     <div
-      className={`fixed bottom-6 right-6 z-50 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-xl transition-all duration-300 ${
+      className={`fixed bottom-6 right-6 z-50 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-xl transition-all duration-300 max-w-md ${
         colors[type] || colors.info
       } ${
         visible
@@ -665,9 +762,14 @@ export default function ReceptionDashboard() {
   const [proc, setProc] = useState('');
   const [fee, setFee] = useState('');
 
-  // A patient under 18 typically has no CNIC of their own — CNIC becomes
-  // optional in that case. Father/Husband name, however, is collected for
-  // EVERY patient (male or female, any age), so it's no longer tied to this.
+  // Family tree: relation of this new person to the family head, and which
+  // family to add to when several unrelated people already share one number
+  const [relation, setRelation] = useState('');
+  const [headId, setHeadId] = useState('');
+  const [familyRows, setFamilyRows] = useState([]);
+
+  // CNIC rule: under 18 → no CNIC needed (field disabled).
+  // 18 or older → CNIC is mandatory. Father/Husband name is collected for EVERY patient.
   const isMinor = age !== '' && Number(age) < 18;
 
   // Validation errors
@@ -743,6 +845,7 @@ export default function ReceptionDashboard() {
   }, []);
 
   // ── Open lab payment modal for a patient — fetch their unpaid lab orders ────
+  // (lab_orders.patient_id holds the QUEUE row id — see Doctor dashboard)
   const openLabPaymentModal = async (patient) => {
     const { data: orders } = await supabase
       .from('lab_orders')
@@ -774,10 +877,31 @@ export default function ReceptionDashboard() {
         .from('queue')
         .update({ status: 'Lab Ordered' })
         .eq('id', labPaymentPatient.id);
-      await supabase
-        .from('medical_visits')
-        .update({ queue_status: 'Lab Ordered', payment_status: 'Paid' })
-        .eq('MR-Number', labPaymentPatient.id);
+
+      // Update ONLY this patient's current visit.
+      // (Old code matched 'MR-Number' = queue id, which could touch a different
+      //  patient's visits once several family members share a number.)
+      const visitUpdate = { queue_status: 'Lab Ordered', payment_status: 'Paid' };
+      if (labPaymentPatient.visit_id) {
+        await supabase
+          .from('medical_visits')
+          .update(visitUpdate)
+          .eq('id', labPaymentPatient.visit_id);
+      } else if (labPaymentPatient.patient_id) {
+        // Older queue rows without visit_id → latest visit of this patient only
+        const { data: lastVisit } = await supabase
+          .from('medical_visits')
+          .select('id')
+          .eq('MR-Number', labPaymentPatient.patient_id)
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (lastVisit && lastVisit.length > 0) {
+          await supabase
+            .from('medical_visits')
+            .update(visitUpdate)
+            .eq('id', lastVisit[0].id);
+        }
+      }
 
       showToast(
         `Payment confirmed — ${labPaymentPatient.name} sent to lab`,
@@ -847,6 +971,34 @@ export default function ReceptionDashboard() {
     if (!editingItem) return;
     setEditSaving(true);
     try {
+      // ── Decide first (before any write) whether the PATIENT record itself
+      //    may be corrected. A returning patient (more than one visit) is never
+      //    rewritten from here — only a brand-new registration is. This is what
+      //    protects an existing family member's record from being overwritten.
+      const patientUpdate = {
+        Guardian_Name: fields.guardianName ? fields.guardianName.trim() : null,
+      };
+      let patientRecordCorrected = false;
+      if (editingItem.patient_id) {
+        const { count } = await supabase
+          .from('medical_visits')
+          .select('id', { count: 'exact', head: true })
+          .eq('MR-Number', editingItem.patient_id);
+
+        if ((count || 0) <= 1) {
+          const newAge = fields.age === '' || fields.age == null ? null : parseInt(fields.age, 10);
+          if (newAge != null && newAge >= 18 && !(editingPatient && editingPatient.CNIC_Number)) {
+            throw new Error(
+              '18+ patient ke liye CNIC zaroori hai. Is entry ko delete karke CNIC ke saath dobara register karo.'
+            );
+          }
+          patientUpdate.Full_Name = fields.name.trim();
+          patientUpdate.age = newAge;
+          patientUpdate.Gender = fields.gender || null;
+          patientRecordCorrected = true;
+        }
+      }
+
       // Always fix the queue entry (what reception actually sees/typed)
       const { error: qErr } = await supabase
         .from('queue')
@@ -873,18 +1025,22 @@ export default function ReceptionDashboard() {
         if (vErr) throw vErr;
       }
 
-      // If linked to a patient record, fix the Father/Husband name too
+      // If linked to a patient record, fix it (Father/Husband always;
+      // name/age/gender only for a brand-new registration — see above)
       if (editingItem.patient_id) {
         const { error: pErr } = await supabase
           .from('patients')
-          .update({
-            Guardian_Name: fields.guardianName ? fields.guardianName.trim() : null,
-          })
+          .update(patientUpdate)
           .eq('id', editingItem.patient_id);
         if (pErr) throw pErr;
       }
 
-      showToast('✅ Entry corrected successfully', 'success');
+      showToast(
+        patientRecordCorrected || !editingItem.patient_id
+          ? '✅ Entry corrected successfully'
+          : '✅ Entry corrected (returning patient — patient record ka naam/age/gender change nahi hua)',
+        'success'
+      );
       setShowEditModal(false);
       setEditingItem(null);
       setEditingVisit(null);
@@ -933,22 +1089,25 @@ export default function ReceptionDashboard() {
     setToast({ message, type, visible: true });
     toastTimer.current = setTimeout(
       () => setToast((t) => ({ ...t, visible: false })),
-      3500
+      type === 'error' ? 6000 : 3500
     );
   };
 
-  // ── Patient lookup (debounced) ────────────────────────────────────────────
+  // ── Patient lookup (debounced) — shows the WHOLE family, never auto-picks one ──
 
   const triggerLookup = useCallback((phoneVal, cnicVal) => {
     clearTimeout(lookupTimer.current);
     const phoneReady = phoneVal && validatePhone(phoneVal);
     const cnicReady = cnicVal && validateCnic(cnicVal);
-    if (!phoneReady && !cnicReady) return;
+    if (!phoneReady && !cnicReady) {
+      setFamilyRows([]);
+      return;
+    }
 
     lookupTimer.current = setTimeout(async () => {
       setLookupLoading(true);
       try {
-        // Build query: OR phone OR cnic match
+        // Everyone matching the phone OR the CNIC
         let query = supabase.from('patients').select('*');
         if (phoneReady && cnicReady) {
           query = query.or(
@@ -959,26 +1118,77 @@ export default function ReceptionDashboard() {
         } else {
           query = query.eq('CNIC_Number', cnicVal);
         }
-        const { data: patients } = await query.limit(1);
-
-        if (patients && patients.length > 0) {
-          const patient = patients[0];
-          // Fetch their visit history
-          const { data: visits } = await supabase
-            .from('medical_visits')
-            .select('*')
-            .eq('MR-Number', patient.id)
-            .order('created_at', { ascending: false })
-            .limit(10);
-          setRevisitPatient(patient);
-          setRevisitVisits(visits || []);
-          setShowModal(true);
+        const { data: found } = await query.limit(50);
+        const matches = found || [];
+        if (matches.length === 0) {
+          setFamilyRows([]);
+          return;
         }
+
+        // Expand to the complete families (head + all members)
+        const roots = Array.from(
+          new Set(matches.map((p) => p.family_head_id || p.id))
+        );
+        const { data: fam } = await supabase
+          .from('patients')
+          .select('*')
+          .or(roots.map((r) => `id.eq.${r},family_head_id.eq.${r}`).join(','))
+          .order('id', { ascending: true });
+        setFamilyRows(fam && fam.length ? fam : matches);
       } finally {
         setLookupLoading(false);
       }
     }, 600);
   }, []);
+
+  // Group the rows into families: { head, members[] }
+  const groups = (() => {
+    const byRoot = {};
+    familyRows.forEach((p) => {
+      const root = p.family_head_id || p.id;
+      (byRoot[root] = byRoot[root] || []).push(p);
+    });
+    return Object.keys(byRoot)
+      .map((root) => {
+        const list = byRoot[root];
+        const head = list.find((p) => String(p.id) === String(root)) || list[0];
+        return { head, members: list.filter((p) => p.id !== head.id) };
+      })
+      .sort((a, b) => a.head.id - b.head.id);
+  })();
+
+  // Families that actually use the typed mobile number
+  const targetGroups =
+    phone && validatePhone(phone)
+      ? groups.filter((g) =>
+          [g.head, ...g.members].some((p) => p.Contact_Number === phone)
+        )
+      : [];
+  const hasFamily = targetGroups.length > 0;
+  const activeHead = hasFamily
+    ? (
+        targetGroups.find((g) => String(g.head.id) === String(headId)) ||
+        targetGroups[0]
+      ).head
+    : null;
+
+  // Patients who are already in today's queue (cannot be checked in twice)
+  const queuedIds = new Set(
+    queue.filter((q) => q.patient_id != null).map((q) => String(q.patient_id))
+  );
+
+  // Open an existing family member for re-check-in (their record is never edited)
+  const openRevisitFor = async (patient) => {
+    const { data: visits } = await supabase
+      .from('medical_visits')
+      .select('*')
+      .eq('MR-Number', patient.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    setRevisitPatient(patient);
+    setRevisitVisits(visits || []);
+    setShowModal(true);
+  };
 
   // ── Phone input handler ───────────────────────────────────────────────────
 
@@ -986,6 +1196,7 @@ export default function ReceptionDashboard() {
     const val = e.target.value.replace(/\D/g, '').slice(0, 11);
     setPhone(val);
     if (phoneErr) setPhoneErr('');
+    setHeadId('');
     triggerLookup(val, cnic);
   };
 
@@ -1008,10 +1219,45 @@ export default function ReceptionDashboard() {
       setCnicErr('Format must be 12345-1234567-1');
   };
 
+  // ── Age handler — a minor has no CNIC, so clear it ────────────────────────
+
+  const handleAgeChange = (e) => {
+    const val = e.target.value;
+    setAge(val);
+    if (val !== '' && Number(val) < 18) {
+      setCnic('');
+      setCnicErr('');
+    }
+  };
+
+  // ── Relation handler — pre-fill Father/Husband + gender from the relation ───
+
+  const handleRelationChange = (r) => {
+    setRelation(r);
+    if (
+      !guardianName.trim() &&
+      activeHead &&
+      ['Son', 'Daughter', 'Wife'].includes(r)
+    ) {
+      setGuardianName(activeHead.Full_Name || '');
+    }
+    if (!gender && REL_GENDER[r]) {
+      setGender(REL_GENDER[r]);
+    }
+  };
+
   // ── Re-check-in from modal (directly insert visit + queue) ─────────────────
 
   const handleReCheckin = async ({ doctor, procedure, fee: modalFee }) => {
     if (!revisitPatient) return;
+
+    // Never put the same person in the queue twice
+    if (queuedIds.has(String(revisitPatient.id))) {
+      setShowModal(false);
+      showToast(`${revisitPatient.Full_Name} pehle se queue mein hai`, 'error');
+      return;
+    }
+
     setShowModal(false);
     setSubmitting(true);
     try {
@@ -1033,7 +1279,7 @@ export default function ReceptionDashboard() {
 
       // Insert queue entry — linked to the patient + visit so a mistaken
       // entry (wrong doctor, fee, etc.) can be corrected later via Edit.
-      const token = generateToken(queue);
+      const queueNo = queue.length + 1;
       const { error: qErr } = await supabase.from('queue').insert({
         name: revisitPatient.Full_Name,
         age: String(revisitPatient.age || ''),
@@ -1046,7 +1292,7 @@ export default function ReceptionDashboard() {
       if (qErr) throw qErr;
 
       showToast(
-        `✅ Token ${token} issued for ${revisitPatient.Full_Name}`,
+        `✅ ${revisitPatient.Full_Name} checked in (Queue No. ${queueNo})`,
         'success'
       );
       clearForm();
@@ -1057,29 +1303,41 @@ export default function ReceptionDashboard() {
     }
   };
 
-  // ── Form submit ───────────────────────────────────────────────────────────
+  // ── Form submit — ALWAYS registers a NEW person; never edits an existing one ──
 
   const handleSubmit = async () => {
     let valid = true;
 
-    if (!phone && !cnic) {
-      setPhoneErr('Enter phone or CNIC to continue');
-      setCnicErr('Enter phone or CNIC to continue');
+    // Mobile number is the anchor of the family tree → mandatory
+    if (!phone) {
+      setPhoneErr('Mobile number is required — the family is linked by mobile number');
       valid = false;
-    } else {
-      if (phone && !validatePhone(phone)) {
-        setPhoneErr('Enter a valid 11-digit number starting with 03');
-        valid = false;
-      }
-      if (cnic && !validateCnic(cnic)) {
-        setCnicErr('Format must be 12345-1234567-1');
-        valid = false;
-      }
+    } else if (!validatePhone(phone)) {
+      setPhoneErr('Enter a valid 11-digit number starting with 03');
+      valid = false;
     }
+
     if (!name.trim()) {
       showToast('Patient name is required', 'error');
       return;
     }
+    if (age === '' || isNaN(Number(age))) {
+      showToast('Age is required', 'error');
+      return;
+    }
+    const isAdult = Number(age) >= 18;
+
+    // 18+ → CNIC mandatory.  Under 18 → no CNIC.
+    if (isAdult) {
+      if (!cnic) {
+        setCnicErr('CNIC is mandatory for patients aged 18 or older');
+        valid = false;
+      } else if (!validateCnic(cnic)) {
+        setCnicErr('Format must be 12345-1234567-1');
+        valid = false;
+      }
+    }
+
     if (!guardianName.trim()) {
       showToast('Father/Husband name is required', 'error');
       return;
@@ -1096,61 +1354,97 @@ export default function ReceptionDashboard() {
 
     setSubmitting(true);
     try {
-      // 1. Check if patient already exists (by phone or CNIC) — no unique constraint needed
-      let patientId = null;
+      // 1. Fresh look at who is already registered on this mobile number
+      const { data: onPhone, error: fErr } = await supabase
+        .from('patients')
+        .select('*')
+        .eq('Contact_Number', phone);
+      if (fErr) throw fErr;
 
-      if (phone || cnic) {
-        let lookupQ = supabase.from('patients').select('id');
-        if (phone && cnic) {
-          lookupQ = lookupQ.or(
-            `Contact_Number.eq.${phone},CNIC_Number.eq.${cnic}`
-          );
-        } else if (phone) {
-          lookupQ = lookupQ.eq('Contact_Number', phone);
+      const headIds = Array.from(
+        new Set((onPhone || []).map((p) => p.family_head_id || p.id))
+      );
+      let familyHeadId = null;
+      if (headIds.length === 1) {
+        familyHeadId = headIds[0];
+      } else if (headIds.length > 1) {
+        if (headId && headIds.map(String).includes(String(headId))) {
+          familyHeadId = Number(headId);
         } else {
-          lookupQ = lookupQ.eq('CNIC_Number', cnic);
-        }
-        const { data: existing } = await lookupQ.limit(1);
-        if (existing && existing.length > 0) {
-          patientId = existing[0].id;
-          // Update their record in case details changed
-          await supabase
-            .from('patients')
-            .update({
-              Full_Name: name.trim(),
-              age: age || null,
-              Gender: gender || null,
-              Guardian_Name: guardianName.trim() || null,
-            })
-            .eq('id', patientId);
+          showToast('Is number par kayi families hain — "Add under family of" select karo', 'error');
+          return;
         }
       }
 
-      // If not found, insert as new patient
-      if (!patientId) {
-        const { data: newP, error: pErr } = await supabase
+      // 2. Relation is required when joining an existing family
+      if (familyHeadId != null && !relation) {
+        showToast('Family head ke saath relation select karo (Wife, Son, ...)', 'error');
+        return;
+      }
+
+      // 3. Same name already in this family? → use Check-in instead of creating a duplicate
+      if (familyHeadId != null) {
+        const { data: fam } = await supabase
           .from('patients')
-          .insert({
-            Full_Name: name.trim(),
-            Contact_Number: phone || null,
-            CNIC_Number: cnic || null,
-            age: age || null,
-            Gender: gender || null,
-            Guardian_Name: guardianName.trim() || null,
-          })
-          .select('id')
-          .single();
-        if (pErr) throw pErr;
-        patientId = newP.id;
+          .select('id, Full_Name')
+          .or(`id.eq.${familyHeadId},family_head_id.eq.${familyHeadId}`);
+        const dupe = (fam || []).find(
+          (p) =>
+            (p.Full_Name || '').trim().toLowerCase() === name.trim().toLowerCase()
+        );
+        if (dupe) {
+          showToast(
+            `"${dupe.Full_Name}" is already in this family (MR #${dupe.id}). Family list se Check-in karo.`,
+            'error'
+          );
+          return;
+        }
       }
 
-      const pData = { id: patientId };
+      // 4. An adult's CNIC can belong to only one patient
+      if (isAdult) {
+        const { data: cnicHit } = await supabase
+          .from('patients')
+          .select('id, Full_Name')
+          .eq('CNIC_Number', cnic)
+          .limit(1);
+        if (cnicHit && cnicHit.length > 0) {
+          showToast(
+            `Ye CNIC pehle se ${cnicHit[0].Full_Name} (MR #${cnicHit[0].id}) ke naam hai. Family list se Check-in karo.`,
+            'error'
+          );
+          return;
+        }
+      }
 
-      // 2. Insert visit record
+      // 5. Insert the NEW person (first person on a number = Family Head)
+      const { data: newP, error: pErr } = await supabase
+        .from('patients')
+        .insert({
+          Full_Name: name.trim(),
+          Contact_Number: phone,
+          CNIC_Number: isAdult ? cnic : null,
+          age: parseInt(age, 10),
+          Gender: gender || null,
+          Guardian_Name: guardianName.trim() || null,
+          relation: familyHeadId != null ? relation : 'Self',
+          family_head_id: familyHeadId,
+        })
+        .select('id')
+        .single();
+      if (pErr) {
+        if (pErr.code === '23505') {
+          throw new Error('Ye CNIC pehle se registered hai.');
+        }
+        throw pErr;
+      }
+      const patientId = newP.id;
+
+      // 6. Insert visit record
       const { data: newVisit, error: vErr } = await supabase
         .from('medical_visits')
         .insert({
-          'MR-Number': pData.id,
+          'MR-Number': patientId,
           doctor_assigned: chair,
           symptoms: proc,
           status: 'Pending',
@@ -1162,9 +1456,9 @@ export default function ReceptionDashboard() {
         .single();
       if (vErr) throw vErr;
 
-      // 3. Insert queue entry — linked to the patient + visit so a mistaken
+      // 7. Insert queue entry — linked to the patient + visit so a mistaken
       //    entry (wrong doctor, fee, etc.) can be corrected later via Edit.
-      const token = generateToken(queue);
+      const queueNo = queue.length + 1;
       const { error: qErr } = await supabase.from('queue').insert({
         name: name.trim(),
         age: age || null,
@@ -1176,7 +1470,12 @@ export default function ReceptionDashboard() {
       });
       if (qErr) throw qErr;
 
-      showToast(`✅ ${name.trim()} checked in successfully!`, 'success');
+      showToast(
+        familyHeadId != null
+          ? `✅ ${name.trim()} added to the family & checked in (Queue No. ${queueNo}, MR #${patientId})`
+          : `✅ ${name.trim()} registered (Family Head, MR #${patientId}) & checked in (Queue No. ${queueNo})`,
+        'success'
+      );
       clearForm();
     } catch (err) {
       showToast(`Error: ${err.message}`, 'error');
@@ -1197,6 +1496,9 @@ export default function ReceptionDashboard() {
     setChair('');
     setProc('');
     setFee('');
+    setRelation('');
+    setHeadId('');
+    setFamilyRows([]);
     setPhoneErr('');
     setCnicErr('');
     setRevisitPatient(null);
@@ -1214,7 +1516,7 @@ export default function ReceptionDashboard() {
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-6 max-w-[1600px] mx-auto space-y-6 bg-slate-50 min-h-screen font-sans text-slate-900">
+    <div className=" space-y-6 bg-slate-50 min-h-screen font-sans text-slate-900">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
         <div>
@@ -1275,7 +1577,7 @@ export default function ReceptionDashboard() {
               {/* Phone */}
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-slate-700">
-                  Phone number
+                  Mobile number <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -1301,7 +1603,14 @@ export default function ReceptionDashboard() {
               {/* CNIC */}
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-slate-700">
-                  CNIC {isMinor && <span className="text-slate-400 font-normal">(not required — under 18)</span>}
+                  CNIC{' '}
+                  {isMinor ? (
+                    <span className="text-slate-400 font-normal">
+                      (not required — under 18)
+                    </span>
+                  ) : (
+                    <span className="text-red-500">*</span>
+                  )}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
@@ -1312,9 +1621,10 @@ export default function ReceptionDashboard() {
                     value={cnic}
                     onChange={handleCnicChange}
                     onBlur={handleCnicBlur}
-                    placeholder="12345-1234567-1"
+                    disabled={isMinor}
+                    placeholder={isMinor ? 'Not needed for under 18' : '12345-1234567-1'}
                     maxLength={15}
-                    className={`w-full pl-9 pr-4 py-2.5 bg-slate-50 border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all ${
+                    className={`w-full pl-9 pr-4 py-2.5 bg-slate-50 border rounded-xl text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all disabled:opacity-50 disabled:bg-slate-100 ${
                       cnicErr ? 'border-red-400 bg-red-50' : 'border-slate-300'
                     }`}
                   />
@@ -1347,11 +1657,31 @@ export default function ReceptionDashboard() {
                     d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
                   />
                 </svg>
-                Looking up patient…
+                Looking up family…
               </div>
             )}
 
+            {/* Family tree — everyone already registered on this number / CNIC */}
+            {groups.length > 0 && (
+              <FamilyPanel
+                groups={groups}
+                queuedIds={queuedIds}
+                onCheckin={openRevisitFor}
+              />
+            )}
+
             <div className="border-t border-dashed border-slate-200" />
+
+            {groups.length > 0 ? (
+              <p className="text-sm font-bold text-slate-700">
+                ➕ Naya family member register karo
+              </p>
+            ) : phone && validatePhone(phone) && !lookupLoading ? (
+              <p className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                ✔ Is mobile number par koi registered nahi — pehla patient{' '}
+                <b>Family Head</b> banega, baad mein wife, bachay, walidain isi number par add ho sakte hain.
+              </p>
+            ) : null}
 
             {/* Name + Age */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1369,12 +1699,12 @@ export default function ReceptionDashboard() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm font-semibold text-slate-700">
-                  Age
+                  Age <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="number"
                   value={age}
-                  onChange={(e) => setAge(e.target.value)}
+                  onChange={handleAgeChange}
                   placeholder="Years"
                   min={0}
                   max={120}
@@ -1383,8 +1713,49 @@ export default function ReceptionDashboard() {
               </div>
             </div>
 
+            {/* Relation to the family head — shown when joining an existing family */}
+            {hasFamily && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-slate-700">
+                    Relation with family head <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={relation}
+                    onChange={(e) => handleRelationChange(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select relation</option>
+                    {RELATIONS.map((r) => (
+                      <option key={r} value={r}>
+                        {relationIcon(r)} {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                {targetGroups.length > 1 && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold text-slate-700">
+                      Add under family of <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={headId || String(targetGroups[0].head.id)}
+                      onChange={(e) => setHeadId(e.target.value)}
+                      className="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      {targetGroups.map((g) => (
+                        <option key={g.head.id} value={g.head.id}>
+                          {g.head.Full_Name} (MR #{g.head.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Father/Husband Name — always shown for every patient (male or
-                female, any age), no longer tied to under-18 status */}
+                female, any age) */}
             <div className="space-y-1.5">
               <label className="text-sm font-semibold text-slate-700">
                 Father/Husband name <span className="text-red-500">*</span>
@@ -1519,8 +1890,10 @@ export default function ReceptionDashboard() {
                     </svg>
                     Processing…
                   </>
+                ) : hasFamily ? (
+                  'Add member, collect fee & add to queue'
                 ) : (
-                  'Collect fee & issue token'
+                  'Collect fee & add to queue'
                 )}
               </button>
             </div>
